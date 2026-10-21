@@ -1,0 +1,228 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+// SQLite for easy local setup. For MySQL production use:
+// datasource db { provider = "mysql" url = env("DATABASE_URL") }
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           Int       @id @default(autoincrement())
+  username     String    @unique
+  email        String    @unique
+  passwordHash String
+  role         String    // SYSTEM_ADMIN | HOSTEL_ADMIN | STUDENT
+  isActive     Boolean   @default(true)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  student      Student?
+  auditLogs    AuditLog[]
+  reviewedRequests HostelRequest[] @relation("ReviewedBy")
+  allocations  Allocation[] @relation("AllocatedBy")
+  payments     Payment[] @relation("RecordedBy")
+  maintenanceUpdates MaintenanceRequest[] @relation("HandledBy")
+  resetTokens  PasswordResetToken[]
+}
+
+model Student {
+  id               Int       @id @default(autoincrement())
+  userId           Int       @unique
+  studentId        String    @unique
+  registrationNo   String    @unique
+  firstName        String
+  lastName         String
+  gender           String
+  phone            String?
+  address          String?
+  program          String?
+  department       String?
+  yearOfStudy      Int?
+  status           String    @default("ACTIVE") // ACTIVE | INACTIVE
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+  user             User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  hostelRequests   HostelRequest[]
+  allocations      Allocation[]
+  feeAssignments   StudentFee[]
+  payments         Payment[]
+  maintenanceRequests MaintenanceRequest[]
+}
+
+model Hostel {
+  id          Int      @id @default(autoincrement())
+  name        String   @unique
+  location    String?
+  description String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  rooms       Room[]
+  requests    HostelRequest[]
+  fees        HostelFee[]
+}
+
+model Room {
+  id          Int      @id @default(autoincrement())
+  hostelId    Int
+  roomNumber  String
+  capacity    Int
+  status      String   @default("AVAILABLE") // AVAILABLE | FULL | MAINTENANCE | INACTIVE
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  hostel      Hostel   @relation(fields: [hostelId], references: [id], onDelete: Cascade)
+  allocations Allocation[]
+  requests    HostelRequest[]
+
+  @@unique([hostelId, roomNumber])
+}
+
+model HostelRequest {
+  id              Int       @id @default(autoincrement())
+  requestNumber   String    @unique
+  studentId       Int
+  preferredHostelId Int?
+  reason          String?
+  status          String    @default("PENDING") // PENDING | APPROVED | REJECTED | CANCELLED
+  requestDate     DateTime  @default(now())
+  decisionDate    DateTime?
+  reviewedById    Int?
+  decisionNote    String?
+  preferredRoomId Int?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  student         Student   @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  preferredHostel Hostel?   @relation(fields: [preferredHostelId], references: [id])
+  preferredRoom   Room?     @relation(fields: [preferredRoomId], references: [id])
+  reviewedBy      User?     @relation("ReviewedBy", fields: [reviewedById], references: [id])
+  allocation      Allocation?
+}
+
+model Allocation {
+  id            Int       @id @default(autoincrement())
+  studentId     Int
+  roomId        Int
+  requestId     Int?      @unique
+  allocatedById Int?
+  allocationDate DateTime @default(now())
+  status        String    @default("ACTIVE") // ACTIVE | CHECKED_IN | CHECKED_OUT | CANCELLED
+  notes         String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  student       Student   @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  room          Room      @relation(fields: [roomId], references: [id])
+  request       HostelRequest? @relation(fields: [requestId], references: [id])
+  allocatedBy   User?     @relation("AllocatedBy", fields: [allocatedById], references: [id])
+  checkIn       CheckIn?
+  checkOut      CheckOut?
+}
+
+model CheckIn {
+  id            Int        @id @default(autoincrement())
+  allocationId  Int        @unique
+  checkInDate   DateTime   @default(now())
+  status        String     @default("CHECKED_IN")
+  notes         String?
+  createdAt     DateTime   @default(now())
+  allocation    Allocation @relation(fields: [allocationId], references: [id], onDelete: Cascade)
+}
+
+model CheckOut {
+  id            Int        @id @default(autoincrement())
+  allocationId  Int        @unique
+  checkOutDate  DateTime   @default(now())
+  reason        String?
+  notes         String?
+  createdAt     DateTime   @default(now())
+  allocation    Allocation @relation(fields: [allocationId], references: [id], onDelete: Cascade)
+}
+
+model HostelFee {
+  id          Int      @id @default(autoincrement())
+  hostelId    Int?
+  name        String
+  amount      Float
+  academicYear String?
+  description String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  hostel      Hostel?  @relation(fields: [hostelId], references: [id])
+  assignments StudentFee[]
+}
+
+model StudentFee {
+  id          Int       @id @default(autoincrement())
+  studentId   Int
+  feeId       Int
+  assignedAt  DateTime  @default(now())
+  notes       String?
+  student     Student   @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  fee         HostelFee @relation(fields: [feeId], references: [id])
+
+  @@unique([studentId, feeId])
+}
+
+model Payment {
+  id              Int      @id @default(autoincrement())
+  studentId       Int
+  amount          Float
+  paymentDate     DateTime @default(now())
+  paymentMethod   String   // CASH | MOBILE_MONEY | BANK | OTHER
+  referenceNumber String?
+  notes           String?
+  recordedById    Int?
+  status          String   @default("CONFIRMED") // CONFIRMED only after manual verification
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  student         Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  recordedBy      User?    @relation("RecordedBy", fields: [recordedById], references: [id])
+}
+
+model MaintenanceRequest {
+  id            Int      @id @default(autoincrement())
+  requestNumber String   @unique
+  studentId     Int
+  title         String
+  description   String
+  status        String   @default("PENDING") // PENDING | IN_PROGRESS | COMPLETED | REJECTED
+  actionsTaken  String?
+  handledById   Int?
+  submittedAt   DateTime @default(now())
+  completedAt   DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  student       Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  handledBy     User?    @relation("HandledBy", fields: [handledById], references: [id])
+}
+
+model AuditLog {
+  id         Int      @id @default(autoincrement())
+  userId     Int?
+  action     String
+  entity     String?
+  entityId   String?
+  details    String?
+  ipAddress  String?
+  createdAt  DateTime @default(now())
+  user       User?    @relation(fields: [userId], references: [id])
+}
+
+model PasswordResetToken {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  token     String   @unique
+  expiresAt DateTime
+  used      Boolean  @default(false)
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model SystemSetting {
+  id        Int      @id @default(autoincrement())
+  key       String   @unique
+  value     String
+  updatedAt DateTime @updatedAt
+}
