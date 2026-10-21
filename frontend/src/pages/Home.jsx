@@ -143,7 +143,7 @@ export default function Home() {
 
       <section id="about" className="max-w-6xl mx-auto px-4 py-16 grid lg:grid-cols-2 gap-10 items-center">
         <div>
-          <h2 className="font-display text-3xl text-[var(--brand-dark)]">About US </h2>
+          <h2 className="font-display text-3xl text-[var(--brand-dark)]">About hostel services</h2>
           <p className="mt-4 text-[var(--muted)] leading-relaxed">
             SHMS helps RP Musanze College manage student accommodation in one place. Students
             request a hostel, administrators review the request, and rooms are allocated only when
